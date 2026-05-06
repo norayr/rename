@@ -1,6 +1,6 @@
 MODULE rename;
 
-IMPORT Oberon, Texts, Files, Strings, Out;
+IMPORT Oberon, Texts, Files, Strings, Out, Platform;
 
 CONST
   MaxName = 256;
@@ -369,14 +369,14 @@ BEGIN
     ELSIF IsOpt(argv[first], "g") THEN glob := TRUE
     ELSE
       Usage;
-      HALT(1)
+      Platform.Exit(1)
     END;
     INC(first)
   END;
 
   IF all & last THEN
     Out.String("rename: -a and -l cannot be used together"); Out.Ln;
-    HALT(1)
+    Platform.Exit(1)
   END
 END ParseOptions;
 
@@ -392,7 +392,7 @@ BEGIN
 
   IF argc - first < 3 THEN
     Usage;
-    HALT(1)
+    Platform.Exit(1)
   END;
 
   COPY(argv[first], from);
