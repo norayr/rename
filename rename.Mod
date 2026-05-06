@@ -13,18 +13,20 @@ TYPE
 VAR
   argc: INTEGER;
   argv: Args;
-  dry, verbose, all, last, glob: BOOLEAN;
+  dry, verbose, all, last, glob, overwrite: BOOLEAN;
 
 
 PROCEDURE Usage;
 BEGIN
-  Out.String("usage: rename [-n] [-v] [-a|-l] FROM TO FILE..."); Out.Ln;
-  Out.String("       rename -g [-n] [-v] FROMPAT TOPAT FILE..."); Out.Ln;
+  Out.String("usage: rename [-n] [-v] [-o|-f] [-a|-l] FROM TO FILE..."); Out.Ln;
+  Out.String("       rename -g [-n] [-v] [-o|-f] FROMPAT TOPAT FILE..."); Out.Ln;
   Out.Ln;
   Out.String("  default: replace first occurrence of FROM with TO"); Out.Ln;
   Out.String("  -a      replace all occurrences"); Out.Ln;
   Out.String("  -l      replace last occurrence"); Out.Ln;
   Out.String("  -g      glob-template mode, e.g. '*.txt' '*.text'"); Out.Ln;
+  Out.String("  -o      no overwrite (default)"); Out.Ln;
+  Out.String("  -f      force overwrite existing target"); Out.Ln;
   Out.String("  -n      dry run"); Out.Ln;
   Out.String("  -v      verbose"); Out.Ln
 END Usage;
@@ -338,8 +340,10 @@ BEGIN
   END;
 
   IF Exists(new) THEN
-    Out.String(old); Out.String(": target exists: "); Out.String(new); Out.Ln;
-    RETURN
+    IF ~overwrite THEN
+      Out.String(old); Out.String(": target exists: "); Out.String(new); Out.Ln;
+      RETURN
+    END
   END;
 
   IF dry OR verbose THEN
@@ -347,6 +351,15 @@ BEGIN
   END;
 
   IF ~dry THEN
+    IF overwrite & Exists(new) THEN
+      Files.Delete(new, res);
+      IF res # 0 THEN
+        Out.String(old); Out.String(": cannot remove existing target: ");
+        Out.String(new); Out.String(", res="); Out.Int(res, 1); Out.Ln;
+        RETURN
+      END
+    END;
+
     Files.Rename(old, new, res);
     IF res # 0 THEN
       Out.String(old); Out.String(": rename failed, res=");
@@ -358,7 +371,7 @@ END DoRename;
 
 PROCEDURE ParseOptions(VAR first: INTEGER);
 BEGIN
-  dry := FALSE; verbose := FALSE; all := FALSE; last := FALSE; glob := FALSE;
+  dry := FALSE; verbose := FALSE; all := FALSE; last := FALSE; glob := FALSE; overwrite := FALSE;
   first := 0;
 
   WHILE (first < argc) & (argv[first][0] = "-") DO
@@ -367,6 +380,8 @@ BEGIN
     ELSIF IsOpt(argv[first], "a") THEN all := TRUE
     ELSIF IsOpt(argv[first], "l") THEN last := TRUE
     ELSIF IsOpt(argv[first], "g") THEN glob := TRUE
+    ELSIF IsOpt(argv[first], "o") THEN overwrite := FALSE
+    ELSIF IsOpt(argv[first], "f") THEN overwrite := TRUE
     ELSE
       Usage;
       Platform.Exit(1)
