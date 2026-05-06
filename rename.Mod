@@ -52,18 +52,6 @@ BEGIN
   END
 END AppendChar;
 
-
-PROCEDURE AppendString(VAR dst: ARRAY OF CHAR; src: ARRAY OF CHAR);
-VAR i: INTEGER;
-BEGIN
-  i := 0;
-  WHILE (src[i] # 0X) & (Len(dst) + 1 < LEN(dst)) DO
-    AppendChar(dst, src[i]);
-    INC(i)
-  END
-END AppendString;
-
-
 PROCEDURE AppendSlice(VAR dst: ARRAY OF CHAR; src: ARRAY OF CHAR; from, till: INTEGER);
 VAR i: INTEGER;
 BEGIN
@@ -165,60 +153,87 @@ BEGIN
   RETURN p
 END FindLast;
 
-
 PROCEDURE ReplaceFirst(name, from, to: ARRAY OF CHAR; VAR out: ARRAY OF CHAR): BOOLEAN;
-VAR p, lf: INTEGER;
+VAR
+  p, lf, ln: INTEGER;
+  tmp: String;
 BEGIN
   p := Strings.Pos(from, name, 0);
   IF p < 0 THEN RETURN FALSE END;
 
-  lf := Len(from);
-  Clear(out);
-  AppendSlice(out, name, 0, p);
-  AppendString(out, to);
-  AppendSlice(out, name, p + lf, Len(name));
+  lf := Strings.Length(from);
+  ln := Strings.Length(name);
+
+  out[0] := 0X;
+
+  Strings.Extract(name, 0, p, tmp);
+  Strings.Append(tmp, out);
+
+  Strings.Append(to, out);
+
+  Strings.Extract(name, p + lf, ln - p - lf, tmp);
+  Strings.Append(tmp, out);
+
   RETURN TRUE
 END ReplaceFirst;
 
-
 PROCEDURE ReplaceLast(name, from, to: ARRAY OF CHAR; VAR out: ARRAY OF CHAR): BOOLEAN;
-VAR p, lf: INTEGER;
+VAR
+  p, lf, ln: INTEGER;
+  tmp: String;
 BEGIN
+  lf := Strings.Length(from);
+  IF lf = 0 THEN RETURN FALSE END;
+
   p := FindLast(from, name);
   IF p < 0 THEN RETURN FALSE END;
 
-  lf := Len(from);
-  Clear(out);
-  AppendSlice(out, name, 0, p);
-  AppendString(out, to);
-  AppendSlice(out, name, p + lf, Len(name));
+  ln := Strings.Length(name);
+  out[0] := 0X;
+
+  Strings.Extract(name, 0, p, tmp);
+  Strings.Append(tmp, out);
+
+  Strings.Append(to, out);
+
+  Strings.Extract(name, p + lf, ln - p - lf, tmp);
+  Strings.Append(tmp, out);
+
   RETURN TRUE
 END ReplaceLast;
 
-
 PROCEDURE ReplaceAll(name, from, to: ARRAY OF CHAR; VAR out: ARRAY OF CHAR): BOOLEAN;
-VAR p, start, lf: INTEGER; changed: BOOLEAN;
+VAR
+  p, start, lf, ln: INTEGER;
+  tmp: String;
+  changed: BOOLEAN;
 BEGIN
-  lf := Len(from);
+  lf := Strings.Length(from);
   IF lf = 0 THEN RETURN FALSE END;
 
-  Clear(out);
+  ln := Strings.Length(name);
+  out[0] := 0X;
   start := 0;
   changed := FALSE;
-  p := Strings.Pos(from, name, start);
 
+  p := Strings.Pos(from, name, start);
   WHILE p >= 0 DO
-    AppendSlice(out, name, start, p);
-    AppendString(out, to);
+    Strings.Extract(name, start, p - start, tmp);
+    Strings.Append(tmp, out);
+
+    Strings.Append(to, out);
+
     start := p + lf;
     changed := TRUE;
+
     p := Strings.Pos(from, name, start)
   END;
 
-  AppendSlice(out, name, start, Len(name));
+  Strings.Extract(name, start, ln - start, tmp);
+  Strings.Append(tmp, out);
+
   RETURN changed
 END ReplaceAll;
-
 
 PROCEDURE StarPos(s: ARRAY OF CHAR): INTEGER;
 VAR i: INTEGER;
@@ -235,54 +250,69 @@ END StarPos;
 PROCEDURE GlobReplace(name, fromPat, toPat: ARRAY OF CHAR; VAR out: ARRAY OF CHAR): BOOLEAN;
 VAR
   sp, tp: INTEGER;
-  preLen, sufLen, nameLen: INTEGER;
+  fromLen, toLen, nameLen: INTEGER;
+  preLen, sufLen, capLen: INTEGER;
+  i: INTEGER;
+  ok: BOOLEAN;
+  tmp: String;
 BEGIN
   sp := StarPos(fromPat);
   tp := StarPos(toPat);
 
+  fromLen := Strings.Length(fromPat);
+  toLen := Strings.Length(toPat);
+  nameLen := Strings.Length(name);
+
+  out[0] := 0X;
+
   IF sp < 0 THEN
-    (* no star: exact whole-name match *)
+    (* No star in source pattern: require exact whole-name match. *)
     IF ~Equal(name, fromPat) THEN RETURN FALSE END;
-    COPY(toPat, out);
+    Strings.Append(toPat, out);
     RETURN TRUE
   END;
 
-  nameLen := Len(name);
   preLen := sp;
-  sufLen := Len(fromPat) - sp - 1;
+  sufLen := fromLen - sp - 1;
 
   IF nameLen < preLen + sufLen THEN RETURN FALSE END;
 
-  (* prefix must match *)
-  IF preLen > 0 THEN
-    IF Strings.Pos(fromPat, name, 0) # 0 THEN
-      RETURN FALSE
-    END
+  (* Check prefix before *. *)
+  ok := TRUE;
+  i := 0;
+  WHILE ok & (i < preLen) DO
+    IF name[i] # fromPat[i] THEN ok := FALSE END;
+    INC(i)
   END;
+  IF ~ok THEN RETURN FALSE END;
 
-  (* suffix must match *)
-  IF sufLen > 0 THEN
-    IF Strings.Pos(fromPat, name, 0) = 0 THEN
-      (* do nothing; exact prefix test above is not enough for suffix *)
-    END
-  END;
-
-  (* manual suffix check *)
-  WHILE sufLen > 0 DO
-    IF name[nameLen - sufLen] # fromPat[Len(fromPat) - sufLen] THEN
-      RETURN FALSE
+  (* Check suffix after *. *)
+  i := 0;
+  WHILE ok & (i < sufLen) DO
+    IF name[nameLen - sufLen + i] # fromPat[sp + 1 + i] THEN
+      ok := FALSE
     END;
-    DEC(sufLen)
+    INC(i)
   END;
+  IF ~ok THEN RETURN FALSE END;
 
-  Clear(out);
+  capLen := nameLen - preLen - sufLen;
 
   IF tp < 0 THEN
-    AppendString(out, toPat)
+    (* Target has no star: replace whole matched name with fixed target. *)
+    Strings.Append(toPat, out)
   ELSE
-    AppendSlice(out, toPat, 0, tp);
-    AppendSlice(out, name, preLen, nameLen - (Len(fromPat) - sp - 1));
-    AppendSlice(out, toPat, tp + 1, Len(toPat))
+    (* Target prefix before *. *)
+    Strings.Extract(toPat, 0, tp, tmp);
+    Strings.Append(tmp, out);
+
+    (* Captured middle from source name. *)
+    Strings.Extract(name, preLen, capLen, tmp);
+    Strings.Append(tmp, out);
+
+    (* Target suffix after *. *)
+    Strings.Extract(toPat, tp + 1, toLen - tp - 1, tmp);
+    Strings.Append(tmp, out)
   END;
 
   RETURN TRUE
