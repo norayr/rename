@@ -32,45 +32,9 @@ BEGIN
 END Usage;
 
 
-PROCEDURE Len(s: ARRAY OF CHAR): INTEGER;
-BEGIN
-  RETURN Strings.Length(s)
-END Len;
-
-
-PROCEDURE Clear(VAR s: ARRAY OF CHAR);
-BEGIN
-  s[0] := 0X
-END Clear;
-
-
-PROCEDURE AppendChar(VAR s: ARRAY OF CHAR; ch: CHAR);
-VAR n: INTEGER;
-BEGIN
-  n := Len(s);
-  IF n + 1 < LEN(s) THEN
-    s[n] := ch;
-    s[n+1] := 0X
-  END
-END AppendChar;
-
-PROCEDURE AppendSlice(VAR dst: ARRAY OF CHAR; src: ARRAY OF CHAR; from, till: INTEGER);
-VAR i: INTEGER;
-BEGIN
-  i := from;
-  WHILE (i < till) & (src[i] # 0X) & (Len(dst) + 1 < LEN(dst)) DO
-    AppendChar(dst, src[i]);
-    INC(i)
-  END
-END AppendSlice;
-
-
 PROCEDURE Equal(a, b: ARRAY OF CHAR): BOOLEAN;
-VAR i: INTEGER;
 BEGIN
-  i := 0;
-  WHILE (a[i] # 0X) & (b[i] # 0X) & (a[i] = b[i]) DO INC(i) END;
-  RETURN a[i] = b[i]
+  RETURN (Strings.Length(a) = Strings.Length(b)) & (Strings.Pos(a, b, 0) = 0)
 END Equal;
 
 
@@ -97,7 +61,7 @@ VAR
   PROCEDURE ReadOne(VAR s: ARRAY OF CHAR);
   VAR i: INTEGER;
   BEGIN
-    Clear(s);
+    s[0] := 0X;
     i := 0;
     inQuote := FALSE;
     q := 0X;
@@ -237,18 +201,6 @@ BEGIN
   RETURN changed
 END ReplaceAll;
 
-PROCEDURE StarPos(s: ARRAY OF CHAR): INTEGER;
-VAR i: INTEGER;
-BEGIN
-  i := 0;
-  WHILE s[i] # 0X DO
-    IF s[i] = "*" THEN RETURN i END;
-    INC(i)
-  END;
-  RETURN -1
-END StarPos;
-
-
 PROCEDURE GlobReplace(name, fromPat, toPat: ARRAY OF CHAR; VAR out: ARRAY OF CHAR): BOOLEAN;
 VAR
   sp, tp: INTEGER;
@@ -258,8 +210,8 @@ VAR
   ok: BOOLEAN;
   tmp: String;
 BEGIN
-  sp := StarPos(fromPat);
-  tp := StarPos(toPat);
+  sp := Strings.Pos("*", fromPat, 0);
+  tp := Strings.Pos("*", toPat, 0);
 
   fromLen := Strings.Length(fromPat);
   toLen := Strings.Length(toPat);
@@ -368,10 +320,10 @@ BEGIN
   END
 END DoRename;
 
-
 PROCEDURE ParseOptions(VAR first: INTEGER);
 BEGIN
-  dry := FALSE; verbose := FALSE; all := FALSE; last := FALSE; glob := FALSE; overwrite := FALSE;
+  dry := FALSE; verbose := FALSE; all := FALSE; last := FALSE;
+  glob := FALSE; overwrite := FALSE;
   first := 0;
 
   WHILE (first < argc) & (argv[first][0] = "-") DO
